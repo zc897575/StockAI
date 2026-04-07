@@ -69,7 +69,7 @@ def get_stock_list():
         url = "http://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData"
         params = {
             "page": 1,
-            "num": 5000,
+            "num": 6000,
             "sort": "changepercent",
             "asc": 0,
             "node": "hs_a",
