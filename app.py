@@ -57,7 +57,7 @@ init_db()
 
 # 辅助函数
 def get_stock_list():
-    """获取全部股票列表，带缓存"""
+    """获取全部股票列表，腾讯财经接口，更稳定"""
     global cache
     now = time.time()
     
@@ -66,8 +66,17 @@ def get_stock_list():
         return cache["stock_list"].copy()
     
     try:
-        df = ak.stock_zh_a_spot_em()
-        df = df[["代码", "名称", "最新价", "涨跌幅", "涨跌额", "成交量", "成交额", "最高", "最低", "今开", "昨收"]]
+        # 腾讯财经全市场行情接口
+        url = "http://qt.gtimg.cn/q=r_hk00700,sh000001,sz399001"
+        # 先拿全量A股数据，用批量接口
+        df = ak.stock_zh_a_spot_tx()
+        df = df[["代码", "名称", "最新", "涨跌额", "涨跌幅", "成交量", "成交额", "最高", "最低", "今开", "昨收"]]
+        df.columns = ["代码", "名称", "最新价", "涨跌额", "涨跌幅", "成交量", "成交额", "最高", "最低", "今开", "昨收"]
+        
+        # 数据类型转换
+        numeric_cols = ["最新价", "涨跌额", "涨跌幅", "成交量", "成交额", "最高", "最低", "今开", "昨收"]
+        for col in numeric_cols:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
         
         # 更新缓存
         cache["stock_list"] = df
@@ -76,15 +85,7 @@ def get_stock_list():
         return df.copy()
     except Exception as e:
         st.error(f"获取行情数据失败: {str(e)}，请稍后刷新重试")
-        # 尝试用备用接口（新浪财经）
-        try:
-            url = "http://hq.sinajs.cn/list=sh000001,sz399001"
-            response = requests.get(url, timeout=5)
-            if response.status_code == 200:
-                st.info("正在使用备用数据源，部分功能可能受限")
-            return None
-        except:
-            return None
+        return None
 
 def get_current_price(stock_code):
     """获取股票当前价格"""
