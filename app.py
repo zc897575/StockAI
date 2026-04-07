@@ -1,5 +1,4 @@
 import streamlit as st
-import akshare as ak
 import pandas as pd
 import numpy as np
 import plotly.express as px
@@ -189,7 +188,7 @@ def calculate_technical_indicators(df):
         return df
 
 def generate_daily_recommendations():
-    """生成每日推荐股票"""
+    """生成每日推荐股票，暂时用涨幅榜前5名替代"""
     try:
         today = datetime.now().strftime("%Y-%m-%d")
         
@@ -202,37 +201,24 @@ def generate_daily_recommendations():
         if result:
             return eval(result[0])
         
-        # 获取沪深300成分股
-        df = ak.index_stock_cons(symbol="000300")
-        recommended = []
+        # 从实时行情里取涨幅前5名
+        df = get_stock_list()
+        if df is None:
+            return []
         
-        for _, row in df.head(20).iterrows():
-            stock_code = row['品种代码']
-            stock_name = row['品种名称']
-            
-            try:
-                # 获取最近30天数据
-                kline = get_kline_data(stock_code, days=30)
-                if kline is None or len(kline) < 20:
-                    continue
-                
-                # 简单策略：最近5天涨幅>3%，且成交量放大
-                recent_change = (kline['收盘'].iloc[-1] - kline['收盘'].iloc[-5]) / kline['收盘'].iloc[-5] * 100
-                volume_avg = kline['成交量'].iloc[-10:].mean()
-                volume_recent = kline['成交量'].iloc[-3:].mean()
-                
-                if recent_change > 3 and volume_recent > volume_avg * 1.2:
-                    recommended.append({
-                        "code": stock_code,
-                        "name": stock_name,
-                        "change": round(recent_change, 2),
-                        "current_price": round(kline['收盘'].iloc[-1], 2)
-                    })
-                
-                if len(recommended) >= 5:
-                    break
-            except:
+        # 取涨幅前5，排除ST和新股
+        recommended = []
+        for _, row in df.sort_values(by="涨跌幅", ascending=False).head(10).iterrows():
+            if "ST" in row["名称"] or "*ST" in row["名称"] or float(row["最新价"]) > 100:
                 continue
+            recommended.append({
+                "code": row["代码"],
+                "name": row["名称"],
+                "change": round(row["涨跌幅"], 2),
+                "current_price": round(row["最新价"], 2)
+            })
+            if len(recommended) >=5:
+                break
         
         # 存入数据库
         c.execute("INSERT OR REPLACE INTO daily_recommendations VALUES (?, ?)", (today, str(recommended)))
@@ -240,7 +226,8 @@ def generate_daily_recommendations():
         conn.close()
         
         return recommended
-    except:
+    except Exception as e:
+        st.error(f"生成推荐失败: {e}")
         return []
 
 # 侧边栏导航
