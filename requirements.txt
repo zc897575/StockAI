@@ -1,5 +1,4 @@
-akshare>=1.12.86
-tushare>=1.2.89
+yfinance>=0.2.38
 streamlit>=1.33.0
 pandas>=2.2.2
 numpy>=1.26.4
