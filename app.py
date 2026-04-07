@@ -66,8 +66,7 @@ def get_stock_list():
         return cache["stock_list"].copy()
     
     try:
-        # 增加超时设置，10秒超时
-        df = ak.stock_zh_a_spot_em(timeout=10)
+        df = ak.stock_zh_a_spot_em()
         df = df[["代码", "名称", "最新价", "涨跌幅", "涨跌额", "成交量", "成交额", "最高", "最低", "今开", "昨收"]]
         
         # 更新缓存
