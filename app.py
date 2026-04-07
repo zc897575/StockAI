@@ -57,7 +57,7 @@ init_db()
 
 # 辅助函数
 def get_stock_list():
-    """获取全部股票列表，使用稳定的东方财富接口，兼容所有版本"""
+    """获取全部股票列表，直接调用新浪原生API，不依赖AkShare，速度更快更稳定"""
     global cache
     now = time.time()
     
@@ -66,8 +66,49 @@ def get_stock_list():
         return cache["stock_list"].copy()
     
     try:
-        df = ak.stock_zh_a_spot_em()
+        # 新浪财经全市场股票接口
+        url = "http://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData"
+        params = {
+            "page": 1,
+            "num": 5000,
+            "sort": "changepercent",
+            "asc": 0,
+            "node": "hs_a",
+            "symbol": "",
+            "_s_r_a": "init"
+        }
+        
+        response = requests.get(url, params=params, timeout=10)
+        if response.status_code != 200:
+            raise Exception(f"接口请求失败，状态码：{response.status_code}")
+        
+        data = response.json()
+        if not data:
+            raise Exception("接口返回空数据")
+        
+        # 转换为DataFrame
+        df = pd.DataFrame(data)
+        df = df.rename(columns={
+            "code": "代码",
+            "name": "名称",
+            "trade": "最新价",
+            "changepercent": "涨跌幅",
+            "pricechange": "涨跌额",
+            "volume": "成交量",
+            "amount": "成交额",
+            "high": "最高",
+            "low": "最低",
+            "open": "今开",
+            "settlement": "昨收"
+        })
+        
+        # 保留需要的列
         df = df[["代码", "名称", "最新价", "涨跌幅", "涨跌额", "成交量", "成交额", "最高", "最低", "今开", "昨收"]]
+        
+        # 数据类型转换
+        numeric_cols = ["最新价", "涨跌幅", "涨跌额", "成交量", "成交额", "最高", "最低", "今开", "昨收"]
+        for col in numeric_cols:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
         
         # 更新缓存
         cache["stock_list"] = df
