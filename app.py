@@ -1,4 +1,5 @@
 import streamlit as st
+import akshare as ak
 import pandas as pd
 import numpy as np
 import plotly.express as px
@@ -10,6 +11,7 @@ import hashlib
 import requests
 import json
 import time
+import akshare as ak
 
 # 全局缓存：行情数据缓存1分钟
 CACHE_DURATION = 60
@@ -392,33 +394,27 @@ if menu == "实时行情":
         search_results = search_stock(search)
         if search_results:
             st.info(f"找到{len(search_results)}只相关股票：")
-            search_codes = [s["code"] for s in search_results]
-            # 从全量搜索结果中获取详情
-            search_df = pd.DataFrame(search_results)
             # 补充行情数据
             price_data = []
             for s in search_results:
                 current_price = get_current_price(s["code"])
-                if current_price:
-                    price_data.append({
-                        "代码": s["code"],
-                        "名称": s["name"],
-                        "最新价": current_price,
-                        "涨跌幅": 0,
-                        "涨跌额": 0,
-                        "成交量": 0,
-                        "成交额": 0,
-                        "最高": 0,
-                        "最低": 0,
-                        "今开": 0,
-                        "昨收": 0
-                    })
-            if price_data:
-                df = pd.DataFrame(price_data)
-            else:
-                df = search_df.rename(columns={"code": "代码", "name": "名称"})
+                price_data.append({
+                    "代码": s["code"],
+                    "名称": s["name"],
+                    "最新价": current_price if current_price else 0,
+                    "涨跌幅": 0,
+                    "涨跌额": 0,
+                    "成交量": 0,
+                    "成交额": 0,
+                    "最高": 0,
+                    "最低": 0,
+                    "今开": 0,
+                    "昨收": 0
+                })
+            df = pd.DataFrame(price_data)
         else:
             st.warning("未找到相关股票，请检查输入")
+            df = pd.DataFrame() # 空DataFrame避免后续报错
     
     # 排序选项
     sort_by = st.selectbox("排序方式", ["涨跌幅", "成交量", "最新价", "成交额"], index=0)
@@ -558,7 +554,7 @@ elif menu == "每日推荐":
         
         # 转换为DataFrame展示
         rec_df = pd.DataFrame(recommendations)
-        rec_df.columns = ["股票代码", "股票名称", "5日涨幅(%)", "当前价格(元)"]
+        rec_df.columns = ["股票代码", "股票名称", "当日涨跌幅(%)", "当前价格(元)"]
         
         st.dataframe(
             rec_df.style.format({
@@ -572,10 +568,10 @@ elif menu == "每日推荐":
         # 推荐逻辑说明
         st.info("""
         推荐策略说明：
-        1. 从沪深300成分股中筛选
-        2. 最近5个交易日涨幅大于3%
-        3. 最近3个交易日成交量较10日均量放大20%以上
-        4. 技术形态处于上升通道
+        1. 从A股实时行情中筛选涨幅靠前的优质股票
+        2. 排除ST、*ST等风险股票
+        3. 优先选择价格适中流动性好的标的
+        4. 每日更新一次
         """)
 
 elif menu == "模拟炒股":
@@ -726,13 +722,13 @@ elif menu == "模拟炒股":
                 trade_data = []
                 for trade in trades:
                     trade_data.append({
-                        "时间": trade[6],
+                        "时间": trade[7],
                         "类型": trade[4],
                         "股票代码": trade[2],
                         "股票名称": trade[3],
                         "数量": trade[5],
                         "价格": round(trade[6], 2),
-                        "收益": round(trade[7], 2)
+                        "收益": round(trade[8], 2)
                     })
                 
                 trade_df = pd.DataFrame(trade_data)
