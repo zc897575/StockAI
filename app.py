@@ -8,6 +8,16 @@ from ta import add_all_ta_features
 from datetime import datetime, timedelta
 import sqlite3
 import hashlib
+import requests
+import json
+import time
+
+# 全局缓存：行情数据缓存1分钟
+CACHE_DURATION = 60
+cache = {
+    "stock_list": None,
+    "stock_list_time": 0
+}
 
 # 页面配置
 st.set_page_config(
@@ -46,11 +56,42 @@ def init_db():
 init_db()
 
 # 辅助函数
+def get_stock_list():
+    """获取全部股票列表，带缓存"""
+    global cache
+    now = time.time()
+    
+    # 如果缓存有效直接返回
+    if cache["stock_list"] is not None and now - cache["stock_list_time"] < CACHE_DURATION:
+        return cache["stock_list"].copy()
+    
+    try:
+        # 增加超时设置，10秒超时
+        df = ak.stock_zh_a_spot_em(timeout=10)
+        df = df[["代码", "名称", "最新价", "涨跌幅", "涨跌额", "成交量", "成交额", "最高", "最低", "今开", "昨收"]]
+        
+        # 更新缓存
+        cache["stock_list"] = df
+        cache["stock_list_time"] = now
+        
+        return df.copy()
+    except Exception as e:
+        st.error(f"获取行情数据失败: {str(e)}，请稍后刷新重试")
+        # 尝试用备用接口（新浪财经）
+        try:
+            url = "http://hq.sinajs.cn/list=sh000001,sz399001"
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                st.info("正在使用备用数据源，部分功能可能受限")
+            return None
+        except:
+            return None
+
 def get_current_price(stock_code):
     """获取股票当前价格"""
     try:
-        df = ak.stock_zh_a_spot_em()
-        if stock_code in df['代码'].values:
+        df = get_stock_list()
+        if df is not None and stock_code in df['代码'].values:
             return float(df[df['代码'] == stock_code]['最新价'].values[0])
         return None
     except:
@@ -59,8 +100,8 @@ def get_current_price(stock_code):
 def get_stock_name(stock_code):
     """获取股票名称"""
     try:
-        df = ak.stock_zh_a_spot_em()
-        if stock_code in df['代码'].values:
+        df = get_stock_list()
+        if df is not None and stock_code in df['代码'].values:
             return df[df['代码'] == stock_code]['名称'].values[0]
         return None
     except:
@@ -209,9 +250,12 @@ if menu == "实时行情":
     st.title("📊 A股实时行情")
     
     # 获取全部A股实时行情
-    with st.spinner("正在加载实时行情数据..."):
-        df = ak.stock_zh_a_spot_em()
-        df = df[["代码", "名称", "最新价", "涨跌幅", "涨跌额", "成交量", "成交额", "最高", "最低", "今开", "昨收"]]
+    with st.spinner("正在加载实时行情数据，首次加载可能需要5-10秒..."):
+        df = get_stock_list()
+    
+    if df is None:
+        st.error("行情数据获取失败，请刷新页面重试，或稍后再试")
+        st.stop()
     
     # 搜索功能
     search = st.text_input("搜索股票代码/名称", "")
