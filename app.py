@@ -461,4 +461,4 @@ elif menu == "量化分析":
         st.plotly_chart(fig, use_container_width=True)
 
 st.sidebar.markdown("---")
-st.sidebar.info("📊 数据来源：AkShare | 仅供学习，不构成投资建议")
+st.sidebar.info("📊 数据来源：Yahoo Finance | 仅供学习，不构成投资建议")
