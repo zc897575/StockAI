@@ -158,22 +158,71 @@ def search_stock(query):
     except:
         return None
 
-def get_current_price(stock_code):
-    """获取股票当前价格"""
+def get_stock_real_time_data(stock_code):
+    """获取单只股票实时数据，支持全市场股票"""
     try:
+        # 自动补全前缀
+        if stock_code.startswith('60') or stock_code.startswith('68'):
+            full_code = f'sh{stock_code}'
+        elif stock_code.startswith('00') or stock_code.startswith('30'):
+            full_code = f'sz{stock_code}'
+        else:
+            full_code = stock_code
+        
+        url = f'http://hq.sinajs.cn/list={full_code}'
+        response = requests.get(url, timeout=3)
+        if response.status_code != 200:
+            return None
+        
+        content = response.text
+        if 'FAILED' in content or len(content.split('"')) < 2:
+            return None
+        
+        data = content.split('"')[1].split(',')
+        if len(data) < 3:
+            return None
+        
+        return {
+            "name": data[0],
+            "open": float(data[1]),
+            "pre_close": float(data[2]),
+            "price": float(data[3]),
+            "high": float(data[4]),
+            "low": float(data[5]),
+            "volume": int(data[8]),
+            "amount": float(data[9])
+        }
+    except:
+        return None
+
+def get_current_price(stock_code):
+    """获取股票当前价格，支持全市场"""
+    try:
+        # 先查缓存
         df = get_stock_list()
         if df is not None and stock_code in df['代码'].values:
             return float(df[df['代码'] == stock_code]['最新价'].values[0])
+        
+        # 缓存没找到，实时查询
+        data = get_stock_real_time_data(stock_code)
+        if data:
+            return data["price"]
         return None
     except:
         return None
 
 def get_stock_name(stock_code):
-    """获取股票名称"""
+    """获取股票名称，支持全市场"""
     try:
+        # 先查缓存
         df = get_stock_list()
         if df is not None and stock_code in df['代码'].values:
             return df[df['代码'] == stock_code]['名称'].values[0]
+        
+        # 缓存没找到，实时查询
+        data = get_stock_real_time_data(stock_code)
+        if data:
+            return data["name"]
         return None
     except:
         return None
