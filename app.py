@@ -56,7 +56,7 @@ init_db()
 
 # 辅助函数
 def get_stock_list():
-    """获取全部股票列表，直接调用新浪原生API，不依赖AkShare，速度更快更稳定"""
+    """获取全部股票列表，分页拉取新浪接口全量数据"""
     global cache
     now = time.time()
     
@@ -65,28 +65,38 @@ def get_stock_list():
         return cache["stock_list"].copy()
     
     try:
-        # 新浪财经全市场股票接口
+        # 新浪财经全市场股票接口，分页拉取
         url = "http://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData"
-        params = {
-            "page": 1,
-            "num": 6000,
-            "sort": "changepercent",
-            "asc": 0,
-            "node": "hs_a",
-            "symbol": "",
-            "_s_r_a": "init"
-        }
+        all_data = []
         
-        response = requests.get(url, params=params, timeout=10)
-        if response.status_code != 200:
-            raise Exception(f"接口请求失败，状态码：{response.status_code}")
+        # 拉取前60页，覆盖全市场A股
+        for page in range(1, 60):
+            params = {
+                "page": page,
+                "num": 100,
+                "sort": "changepercent",
+                "asc": 0,
+                "node": "hs_a",
+                "symbol": "",
+                "_s_r_a": "init"
+            }
+            
+            response = requests.get(url, params=params, timeout=5)
+            if response.status_code != 200:
+                break
+            
+            data = response.json()
+            if not data:
+                break
+            
+            all_data.extend(data)
+            time.sleep(0.1) # 避免请求过快
         
-        data = response.json()
-        if not data:
+        if not all_data:
             raise Exception("接口返回空数据")
         
         # 转换为DataFrame
-        df = pd.DataFrame(data)
+        df = pd.DataFrame(all_data)
         df = df.rename(columns={
             "code": "代码",
             "name": "名称",
@@ -108,6 +118,9 @@ def get_stock_list():
         numeric_cols = ["最新价", "涨跌幅", "涨跌额", "成交量", "成交额", "最高", "最低", "今开", "昨收"]
         for col in numeric_cols:
             df[col] = pd.to_numeric(df[col], errors="coerce")
+        
+        # 去重
+        df = df.drop_duplicates(subset=["代码"])
         
         # 更新缓存
         cache["stock_list"] = df
