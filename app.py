@@ -317,7 +317,7 @@ if menu == "实时行情":
             "最低": "{:.2f}",
             "今开": "{:.2f}",
             "昨收": "{:.2f}"
-        }).applymap(lambda x: 'color: red' if isinstance(x, (int, float)) and x > 0 else 'color: green' if isinstance(x, (int, float)) and x < 0 else '', subset=['涨跌幅', '涨跌额']),
+        }).map(lambda x: 'color: red' if isinstance(x, (int, float)) and x > 0 else 'color: green' if isinstance(x, (int, float)) and x < 0 else '', subset=['涨跌幅', '涨跌额']),
         use_container_width=True,
         height=600
     )
@@ -445,7 +445,7 @@ elif menu == "每日推荐":
             rec_df.style.format({
                 "5日涨幅(%)": "{:.2f}%",
                 "当前价格(元)": "{:.2f}"
-            }).applymap(lambda x: 'color: red' if x > 0 else 'color: green', subset=['5日涨幅(%)']),
+            }).map(lambda x: 'color: red' if x > 0 else 'color: green', subset=['5日涨幅(%)']),
             use_container_width=True,
             height=300
         )
@@ -593,7 +593,7 @@ elif menu == "模拟炒股":
                         "当前价": "{:.2f}",
                         "持仓收益": "{:.2f}",
                         "收益率(%)": "{:.2f}%"
-                    }).applymap(lambda x: 'color: red' if x > 0 else 'color: green', subset=['持仓收益', '收益率(%)']),
+                    }).map(lambda x: 'color: red' if x > 0 else 'color: green', subset=['持仓收益', '收益率(%)']),
                     use_container_width=True
                 )
         
