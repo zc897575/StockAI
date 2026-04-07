@@ -56,7 +56,7 @@ init_db()
 
 # 辅助函数
 def get_stock_list():
-    """获取全部股票列表，分页拉取新浪接口全量数据"""
+    """获取热门股票列表，只拉取前200条，提升加载速度"""
     global cache
     now = time.time()
     
@@ -65,12 +65,11 @@ def get_stock_list():
         return cache["stock_list"].copy()
     
     try:
-        # 新浪财经全市场股票接口，分页拉取
+        # 只拉取前2页，共200只热门股票，展示涨跌榜
         url = "http://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData"
         all_data = []
         
-        # 拉取前60页，覆盖全市场A股
-        for page in range(1, 60):
+        for page in range(1, 3):
             params = {
                 "page": page,
                 "num": 100,
@@ -90,7 +89,6 @@ def get_stock_list():
                 break
             
             all_data.extend(data)
-            time.sleep(0.1) # 避免请求过快
         
         if not all_data:
             raise Exception("接口返回空数据")
@@ -119,9 +117,6 @@ def get_stock_list():
         for col in numeric_cols:
             df[col] = pd.to_numeric(df[col], errors="coerce")
         
-        # 去重
-        df = df.drop_duplicates(subset=["代码"])
-        
         # 更新缓存
         cache["stock_list"] = df
         cache["stock_list_time"] = now
@@ -129,6 +124,38 @@ def get_stock_list():
         return df.copy()
     except Exception as e:
         st.error(f"获取行情数据失败: {str(e)}，请稍后刷新重试")
+        return None
+
+def search_stock(query):
+    """实时搜索股票，支持代码/名称模糊搜索"""
+    try:
+        # 新浪股票搜索接口
+        url = f"http://suggest3.sinajs.cn/suggest/type=11,12&key={query}"
+        response = requests.get(url, timeout=3)
+        if response.status_code != 200:
+            return None
+        
+        content = response.text
+        # 解析返回内容
+        result = content.split('"')[1]
+        if not result:
+            return None
+        
+        items = result.split(';')
+        stocks = []
+        for item in items:
+            parts = item.split(',')
+            if len(parts) >= 4:
+                stock_code = parts[2]
+                stock_name = parts[3]
+                # 只返回A股
+                if stock_code.startswith(('60', '00', '30', '68')):
+                    stocks.append({
+                        "code": stock_code,
+                        "name": stock_name
+                    })
+        return stocks
+    except:
         return None
 
 def get_current_price(stock_code):
@@ -310,9 +337,39 @@ if menu == "实时行情":
         st.stop()
     
     # 搜索功能
-    search = st.text_input("搜索股票代码/名称", "")
+    search = st.text_input("搜索股票代码/名称（输入后实时搜索全市场股票）", "")
     if search:
-        df = df[df['代码'].str.contains(search) | df['名称'].str.contains(search)]
+        # 实时搜索全市场股票
+        search_results = search_stock(search)
+        if search_results:
+            st.info(f"找到{len(search_results)}只相关股票：")
+            search_codes = [s["code"] for s in search_results]
+            # 从全量搜索结果中获取详情
+            search_df = pd.DataFrame(search_results)
+            # 补充行情数据
+            price_data = []
+            for s in search_results:
+                current_price = get_current_price(s["code"])
+                if current_price:
+                    price_data.append({
+                        "代码": s["code"],
+                        "名称": s["name"],
+                        "最新价": current_price,
+                        "涨跌幅": 0,
+                        "涨跌额": 0,
+                        "成交量": 0,
+                        "成交额": 0,
+                        "最高": 0,
+                        "最低": 0,
+                        "今开": 0,
+                        "昨收": 0
+                    })
+            if price_data:
+                df = pd.DataFrame(price_data)
+            else:
+                df = search_df.rename(columns={"code": "代码", "name": "名称"})
+        else:
+            st.warning("未找到相关股票，请检查输入")
     
     # 排序选项
     sort_by = st.selectbox("排序方式", ["涨跌幅", "成交量", "最新价", "成交额"], index=0)
