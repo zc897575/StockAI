@@ -107,23 +107,43 @@ def get_stock_name(stock_code):
         return None
 
 def get_kline_data(stock_code, period="daily", days=180):
-    """获取K线数据"""
-    try:
-        end_date = datetime.now().strftime("%Y%m%d")
-        start_date = (datetime.now() - timedelta(days=days)).strftime("%Y%m%d")
-        
-        if period == "daily":
-            df = ak.stock_zh_a_hist(symbol=stock_code, period="daily", start_date=start_date, end_date=end_date, adjust="qfq")
-        elif period == "weekly":
-            df = ak.stock_zh_a_hist(symbol=stock_code, period="weekly", start_date=start_date, end_date=end_date, adjust="qfq")
-        else:
-            df = ak.stock_zh_a_hist(symbol=stock_code, period="monthly", start_date=start_date, end_date=end_date, adjust="qfq")
-        
-        df.columns = ["日期", "开盘", "最高", "最低", "收盘", "成交量", "成交额", "振幅", "涨跌幅", "涨跌额", "换手率"]
-        return df
-    except Exception as e:
-        st.error(f"获取K线数据失败: {e}")
-        return None
+    """获取K线数据，增加重试和备用数据源"""
+    end_date = datetime.now().strftime("%Y%m%d")
+    start_date = (datetime.now() - timedelta(days=days)).strftime("%Y%m%d")
+    
+    # 尝试3次
+    for retry in range(3):
+        try:
+            if period == "daily":
+                df = ak.stock_zh_a_hist(symbol=stock_code, period="daily", start_date=start_date, end_date=end_date, adjust="qfq")
+            elif period == "weekly":
+                df = ak.stock_zh_a_hist(symbol=stock_code, period="weekly", start_date=start_date, end_date=end_date, adjust="qfq")
+            else:
+                df = ak.stock_zh_a_hist(symbol=stock_code, period="monthly", start_date=start_date, end_date=end_date, adjust="qfq")
+            
+            if len(df) > 0:
+                df.columns = ["日期", "开盘", "最高", "最低", "收盘", "成交量", "成交额", "振幅", "涨跌幅", "涨跌额", "换手率"]
+                return df
+        except Exception as e:
+            if retry == 2: # 最后一次尝试失败，用备用接口
+                try:
+                    # 备用接口：新浪财经K线
+                    df = ak.stock_zh_a_daily(symbol=stock_code, start_date=start_date, end_date=end_date, adjust="qfq")
+                    if len(df) > 0:
+                        df = df.reset_index()
+                        df.columns = ["日期", "开盘", "最高", "最低", "收盘", "成交量", "成交额"]
+                        # 计算其他指标
+                        df["涨跌幅"] = (df["收盘"] - df["收盘"].shift(1)) / df["收盘"].shift(1) * 100
+                        df["涨跌额"] = df["收盘"] - df["收盘"].shift(1)
+                        df["振幅"] = (df["最高"] - df["最低"]) / df["收盘"].shift(1) * 100
+                        df["换手率"] = 0 # 新浪接口没有换手率，暂时填空
+                        return df
+                except Exception as e2:
+                    if retry == 2:
+                        st.error(f"获取K线数据失败: {e2}，请稍后重试或换其他股票")
+                        return None
+            time.sleep(1) # 重试间隔1秒
+    return None
 
 def calculate_technical_indicators(df):
     """计算技术指标"""
