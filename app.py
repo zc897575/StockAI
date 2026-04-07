@@ -36,10 +36,12 @@ init_db()
 # 辅助函数
 @st.cache_data(ttl=60)
 def get_stock_list():
-    """获取全部A股实时行情"""
+    """获取A股实时行情，只返回前200只热门股票，提升加载速度"""
     try:
         df = ak.stock_zh_a_spot_em()
         df = df[["代码", "名称", "最新价", "涨跌幅", "涨跌额", "成交量", "成交额", "最高", "最低", "今开", "昨收"]]
+        # 只返回涨幅前200只，提升加载速度
+        df = df.sort_values(by="涨跌幅", ascending=False).head(200)
         return df
     except Exception as e:
         st.error(f"获取行情失败: {e}")
